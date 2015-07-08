@@ -15,7 +15,8 @@ TO DO:
 
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
-#include <SdFat.h>
+//#include <SdFat.h>
+#include <SD.h>
 #include <SHT1x.h>
 #include <SoftwareSerial.h>
 #include <SPI.h>
@@ -49,9 +50,7 @@ const int joystickSelectPin = 2;
 
 // Objects
 LiquidCrystal_I2C lcd(lcdAddress, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
-SdFat sd;
-SdFile infoFile;
-SdFile logFile;
+File logFile, infoFile;
 SHT1x sht1x(sdaPin, sclPin);  // Temperature & humidity (Sensiron)
 SoftwareSerial gpsSerial(8, 7);
 TinyGPS gps;
@@ -249,8 +248,7 @@ boolean feedgps() {
 }
 
 void sdWriteData() {
-  /*logFile = ;
-  if (!logFile) sd.errorHalt("Failed to open log file.");
+  if (!logFile) programError(7);
   String logDateTimeString = gpsDate + "," + gpsTime;
   String logDataString = String(satellites) + "," + String(hdop) + "," + String(gpsAltitudeFt) + "," + String(gpsSpeedMPH) + "," + String(gpsCourse);
   logFile.print(logDateTimeString);
@@ -269,14 +267,13 @@ void sdWriteData() {
   }
   else logFile.println(F("---"));
   logFile.flush();
-  logFile.close();*/
+  logFile.close();
 }
 
 void sdWriteInfo(String infoString) {
-  /*infoFile = ;
-  if (!infoFile) sd.errorHalt("Failed to open info file.");
+  if (!infoFile) programError(8);
   String infoDateTimeString = gpsDate + "," + gpsTime;
-  infoFile.close();*/
+  infoFile.close();
 }
 
 void serialPrintData() {
@@ -384,7 +381,9 @@ void setupFunctions() {
   lcd.begin(16, 2);
   lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("Adventure Box v2");
+  lcd.print("Adventure Box");
+  lcd.setCursor(0, 1);
+  lcd.print("Version 2.1");
   delay(5000);
   lcd.setCursor(0, 1);
   lcd.print("Beginning setup.");
@@ -405,9 +404,9 @@ void setupFunctions() {
   delay(500);
   lcd.print(".");
   delay(500);
-  if (!sd.begin(sdSlaveSelect, SPI_FULL_SPEED)) {
+  if (!SD.begin(sdSlaveSelect)) {
     lcd.print("fail.");
-    sd.initErrorHalt();
+    programError(0);
   }
   else lcd.print("done!");
   delay(500);
@@ -428,7 +427,7 @@ void setupFunctions() {
   delay(500);
   if (!sht1x.readTemperatureC() || !sht1x.readTemperatureF() || !sht1x.readHumidity()) {
     lcd.print("fail.");
-    programError(1);
+    programError(2);
   }
   else lcd.print("done!");
   delay(1000);
@@ -472,29 +471,44 @@ void createPaths() {
     char c = infoFileNameRaw.charAt(x);
     infoFileName[x] = c;
   }
-  if (!sd.mkdir(directoryName)) {
-    sd.errorHalt("Failed to create directory.");
-  }
-  if (!logFile.open(logFileName, O_CREAT | O_WRITE)) {
-    sd.errorHalt("Failed to create log file.");
-  }
+
+  if (!SD.mkdir(directoryName)) programError(3);
+  logFile = SD.open(logFileName, FILE_WRITE);
+  if (!logFile) programError(5);
   logFile.close();
-  if (!logFile.open(infoFileName, O_CREAT | O_WRITE)) {
-    sd.errorHalt("Failed to create info file.");
-  }
+  logFile = SD.open(logFileName, FILE_WRITE);
+  if (!logFile) programError(6);
   infoFile.close();
 }
 
 void programError(int errorCode) {
   switch (errorCode) {
     case 0:
-      Serial.println(F("LCD failed to initialize."));
+      Serial.println(F("SD card failed to initialize."));
       break;
     case 1:
-      Serial.println(F("SHT11 failed to initialize."));
+      Serial.println(F("LCD failed to initialize."));
       break;
     case 2:
+      Serial.println(F("SHT11 failed to initialize."));
+      break;
+    case 3:
       Serial.println(F("GPS failed to initialize."));
+      break;
+    case 4:
+      Serial.println(F("Failed to created storage directory."));
+      break;
+    case 5:
+      Serial.println(F("Failed to create log file."));
+      break;
+    case 6:
+      Serial.println(F("Failed to create info file."));
+      break;
+    case 7:
+      Serial.println(F("Failed to open log file."));
+      break;
+    case 8:
+      Serial.println(F("Failed to open info file."));
       break;
     default:
       break;
