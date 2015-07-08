@@ -1,6 +1,6 @@
 /*
 
-Adventure Box v2.0
+Adventure Box v2 Development Tree
 
 GPS and data tracking/logging device to record trip data on hikes, expeditions, etc.
 
@@ -39,6 +39,7 @@ TO DO:
 const int UPDATERATE = 5000;
 const int TIMEOFFSETUTC = -4;  // Eastern Standard Time
 const int MINSATELLITES = 4;  // Minimum satellite locks acquired before proceeding
+const int MENUTIMEOUT = 10000; // Main menu backlight timout (milliseconds) before returning to sleep mode
 
 // Pins
 const int sdSlaveSelect = 10;
@@ -148,21 +149,24 @@ void setup() {
   if (resumeTrip == false) mainMenu();
   else {
     lcd.print("Resuming trip.");
+    // INSERT NAME OF RESUMED TRIP HERE ON LCD
     delay(5000);
     lcd.clear();
   }
-
-  lcd.noBacklight();
 }
 
 void loop() {
-  createPaths();
+  lcd.noBacklight();
+  EEPROM.write(255, 1);
+  while (true) {
+    // Trip logging
+  }
 }
 
 void gpsGetData() {
   boolean newdata = false;
   unsigned long start = millis();
-  while (millis() - start < 1000) { // Update every 5 seconds
+  while (millis() - start < 1000) {
     if (feedgps()) newdata = true;
   }
   if (newdata) gpsdump(gps);
@@ -321,7 +325,7 @@ void mainMenu() {
   lcd.write(254);  // "Dot" character
   boolean optionSelect = true;
   boolean exitMenu = false;
-  while (true) {
+  for (unsigned long x = millis(); (millis() - x) < MENUTIMEOUT; ) {
     switch (joystickSelect()) {
       case 0:
         break;
@@ -358,6 +362,11 @@ void mainMenu() {
     delay(10);
   }
   if (newTrip == false) sleepMode();
+  else {
+    lcd.print("Beginning trip.");
+    delay(5000);
+    lcd.clear();
+  }
 }
 
 void tripMenu() {
