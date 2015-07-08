@@ -5,13 +5,19 @@ Adventure Box v2 Development Tree
 GPS and data tracking/logging device to record trip data on hikes, expeditions, etc.
 
 TO DO:
-- Sensiron SHT11x
-- Add button to mark favorite locations with text input for description
--- Save in separate file
--- On next trip, alert when close
+
 - If trip folder exists for certain date, increment tripNumber by one to prevent conflict
 
+- Add text input library and menus
+
+- Add EEPROM directory name storage for resume of trip on reboot
+- Add EEPROM trip number storage
+-- Use/reset after initial directory check and creation
+- Add text input library (CAPS ONLY [KISS prototyping strategy])
+- Add HIGH/LOW's to EEPROM long-term and for individual trips
 */
+
+#define debugMode  // Comment out to eliminate data serial prints
 
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
@@ -25,21 +31,11 @@ TO DO:
 
 #define lcdAddress 0x27
 
-/*
-- LCD
-- SD
-- SHT1x
-- SoftwareSerial
-- GPS
-- Analog
-- Digital
-*/
-
 // Constants
 const int UPDATERATE = 5000;
 const int TIMEOFFSETUTC = -4;  // Eastern Standard Time
 const int MINSATELLITES = 4;  // Minimum satellite locks acquired before proceeding
-const int MENUTIMEOUT = 10000; // Main menu backlight timout (milliseconds) before returning to sleep mode
+const int MENUTIMEOUT = 10000; // Main menu backlight timout (milliseconds) before returning to sleep or trip data logging
 
 // Pins
 const int sdSlaveSelect = 10;
@@ -61,10 +57,12 @@ int satellites, hdop;
 float gpsLat, gpsLon;
 String gpsTime, gpsDate;
 float gpsAltitudeFt, gpsSpeedMPH, gpsCourse;
-boolean positionMarker;
+float tempF, humidityRH;
 boolean pathSetup = false;
+boolean shtPresent;
 int tripNumber = 1;
 String directoryNameRaw;
+boolean positionMarker;
 
 void setup() {
   Serial.begin(9600);
@@ -160,6 +158,17 @@ void loop() {
   EEPROM.write(255, 1);
   while (true) {
     // Trip logging
+    for (unsigned long x = millis(); (millis() - x) < (UPDATERATE - 1000); ) {
+      if (joystickSelect() == 5) {
+        while (joystickSelect() == 5) {
+          delay(10);
+        }
+      }
+      tripMenu();
+      break;
+    }
+    gpsGetData();
+    if (shtPresent == true) shtGetData();
   }
 }
 
@@ -251,10 +260,20 @@ boolean feedgps() {
   return false;
 }
 
+void shtGetData() {
+  tempF = sht1x.readTemperatureF();
+  humidityRH = sht1x.readHumidity();
+}
+
+void locationComment() {
+}
+
+// Write all data compiled into string into main log file of SD card
 void sdWriteData() {
   if (!logFile) programError(7);
   String logDateTimeString = gpsDate + "," + gpsTime;
   String logDataString = String(satellites) + "," + String(hdop) + "," + String(gpsAltitudeFt) + "," + String(gpsSpeedMPH) + "," + String(gpsCourse);
+  String shtDataString = String(tempF) + "," + String(humidityRH);
   logFile.print(logDateTimeString);
   logFile.print(F(","));
   logFile.print(gpsLat, 6);
@@ -263,6 +282,10 @@ void sdWriteData() {
   logFile.print(F(","));
   logFile.print(logDataString);
   logFile.print(F(","));
+  if (shtPresent == true) {
+    logFile.print(shtDataString);
+    logFile.print(F(","));
+  }
   logFile.print(positionMarker);
   logFile.print(F(","));
   if (positionMarker == true) {
@@ -274,15 +297,19 @@ void sdWriteData() {
   logFile.close();
 }
 
+// Write any data of choice into info file on SD card
 void sdWriteInfo(String infoString) {
   if (!infoFile) programError(8);
   String infoDateTimeString = gpsDate + "," + gpsTime;
   infoFile.close();
 }
 
+// Print data from sdWriteData() if desired for debugging
+#ifdef debugMode
 void serialPrintData() {
   String logDateTimeString = gpsDate + "," + gpsTime;
   String logDataString = String(satellites) + "," + String(hdop) + "," + String(gpsAltitudeFt) + "," + String(gpsSpeedMPH) + "," + String(gpsCourse);
+  String shtDataString = String(tempF) + "," + String(humidityRH);
   Serial.print(logDateTimeString);
   Serial.print(F(","));
   Serial.print(gpsLat, 6);
@@ -291,6 +318,10 @@ void serialPrintData() {
   Serial.print(F(","));
   Serial.print(logDataString);
   Serial.print(F(","));
+  if (shtPresent == true) {
+    Serial.print(shtDataString);
+    Serial.print(F(","));
+  }
   Serial.print(positionMarker);
   Serial.print(F(","));
   if (positionMarker == true) {
@@ -300,7 +331,9 @@ void serialPrintData() {
   else Serial.println(F("---"));
   Serial.flush();
 }
+#endif
 
+// Detect and buffer digital/analog input from joystick and return positional value
 byte joystickSelect() {
   int buttonState = digitalRead(joystickSelectPin);
   int xMapped = map(analogRead(joystickXPin), 0, 1023, 0, 100);
@@ -314,6 +347,7 @@ byte joystickSelect() {
   else return 0;
 }
 
+// Main menu presented when not currently in trip mode
 void mainMenu() {
   boolean newTrip = false;
   lcd.print("Begin new trip?");
@@ -329,6 +363,9 @@ void mainMenu() {
     switch (joystickSelect()) {
       case 0:
         break;
+      case 1:
+        x = millis();
+        break;
       case 2:
         if (optionSelect == true) {
           optionSelect = false;
@@ -336,7 +373,11 @@ void mainMenu() {
           lcd.print(" ");
           lcd.setCursor(5, 1);
           lcd.write(254);  // "Dot" character
+          x = millis();
         }
+        break;
+      case 3:
+        x = millis();
         break;
       case 4:
         if (optionSelect == false) {
@@ -345,6 +386,7 @@ void mainMenu() {
           lcd.print(" ");
           lcd.setCursor(0, 1);
           lcd.write(254);  // "Dot" character
+          x = millis();
         }
         break;
       case 5:
@@ -369,10 +411,75 @@ void mainMenu() {
   }
 }
 
+// Menu presented while currently in trip mode
 void tripMenu() {
+  /*
+  Options:
+  - Location comment [locationComment()]
+  - End trip
+  */
+  lcd.setCursor(1, 0);
+  lcd.print("Mark location.");
+  lcd.setCursor(1, 1);
+  lcd.print("End trip.");
+  lcd.setCursor(0, 0);
+  lcd.write(254);  // "Dot" character
+  boolean optionSelect = false;
+  boolean exitMenu = false;
 
+  for (unsigned long x = millis(); (millis() - x) < MENUTIMEOUT; ) {
+    switch (joystickSelect()) {
+      case 0:
+        break;
+      case 1:
+        if (optionSelect == true) {
+          lcd.setCursor(0, 1);
+          lcd.print(" ");
+          lcd.setCursor(0, 0);
+          lcd.write(254);
+          optionSelect = false;
+        }
+        x = millis();
+        break;
+      case 2:
+        x = millis();
+        break;
+      case 3:
+        if (optionSelect == false) {
+          lcd.setCursor(0, 0);
+          lcd.print(" ");
+          lcd.setCursor(0, 1);
+          lcd.write(254);
+          optionSelect = true;
+        }
+        x = millis();
+        break;
+      case 4:
+        x = millis();
+        break;
+      case 5:
+        x = millis();
+        break;
+      default:
+        break;
+    }
+    if (exitMenu == true) {
+      lcd.clear();
+      break;
+    }
+    delay(10);
+  }
+  if (optionSelect == true) {
+    // Add confirmation message
+    EEPROM.write(255, 0);
+    lcd.print("Trip ended.");
+    delay(5000);
+    // Display trip stats here!!!!
+    mainMenu();
+  }
 }
 
+// Disables LCD backlight and waits for outside input to conserve battery life
 void sleepMode() {
   lcd.noBacklight();
   while (true) {
@@ -385,6 +492,8 @@ void sleepMode() {
   mainMenu();
 }
 
+// Performs all serial, software, object, and sensor initiation functions.//
+////-->Would have included in main setup, but numerous one-time execution considerations were necessary.
 void setupFunctions() {
   // Need to find alternate method of testing initialization of each component and triggering error when necessary
   lcd.begin(16, 2);
@@ -435,10 +544,13 @@ void setupFunctions() {
   lcd.print(".");
   delay(500);
   if (!sht1x.readTemperatureC() || !sht1x.readTemperatureF() || !sht1x.readHumidity()) {
-    lcd.print("fail.");
-    programError(2);
+    lcd.print("N/A.");
+    shtPresent = false;
   }
-  else lcd.print("done!");
+  else {
+    lcd.print("done!");
+    shtPresent = true;
+  }
   delay(1000);
   lcd.setCursor(0, 1);
   for (int x = 0; x < 16; x++) {
@@ -485,8 +597,8 @@ void createPaths() {
   logFile = SD.open(logFileName, FILE_WRITE);
   if (!logFile) programError(5);
   logFile.close();
-  logFile = SD.open(logFileName, FILE_WRITE);
-  if (!logFile) programError(6);
+  infoFile = SD.open(infoFileName, FILE_WRITE);
+  if (!infoFile) programError(6);
   infoFile.close();
 }
 
@@ -498,9 +610,9 @@ void programError(int errorCode) {
     case 1:
       Serial.println(F("LCD failed to initialize."));
       break;
-    case 2:
+    /*case 2:
       Serial.println(F("SHT11 failed to initialize."));
-      break;
+      break;*/
     case 3:
       Serial.println(F("GPS failed to initialize."));
       break;
