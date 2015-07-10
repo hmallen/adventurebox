@@ -313,6 +313,16 @@ void textInput(int inputType) {
     }
     if (exitMenu == true) {
       lcd.clear();
+      byte newSize = 17;
+      for (int x = 15; x >= 0; x--) {
+        byte b = charValues[x];
+        if (b == 32) newSize--;
+        if (b != 32) break;
+      }
+      for (int x = 0; x < newSize; x++) {
+        char c = charValues[x];
+        infoString += c;
+      }
       break;
     }
     delay(10);
@@ -339,7 +349,7 @@ void sdWriteData() {
   }
   logFile.print(positionMarker);
   logFile.print(F(","));
-  if (positionMarker == true) logFile.println(F("COMMENT"));
+  if (positionMarker == true) logFile.println(infoString);
   else logFile.println(F("---"));
   logFile.flush();
   logFile.close();
