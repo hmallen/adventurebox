@@ -73,7 +73,7 @@ boolean externalSensorsPresent;
 String directoryNameRaw;
 char directoryName[9];
 boolean positionMarker;
-String infoString;
+String inputString;
 
 void setup() {
   Serial.begin(9600);
@@ -145,7 +145,7 @@ void loop() {
     if (debugMode == true) serialPrintData();
     if (positionMarker == true) {
       sdWriteInfo();
-      infoString = "";
+      inputString = "";
       positionMarker = false;
     }
   }
@@ -321,7 +321,7 @@ void textInput(int inputType) {
       }
       for (int x = 0; x < newSize; x++) {
         char c = charValues[x];
-        infoString += c;
+        inputString += c;
       }
       break;
     }
@@ -349,7 +349,7 @@ void sdWriteData() {
   }
   logFile.print(positionMarker);
   logFile.print(F(","));
-  if (positionMarker == true) logFile.println(infoString);
+  if (positionMarker == true) logFile.println(inputString);
   else logFile.println(F("---"));
   logFile.flush();
   logFile.close();
@@ -363,7 +363,7 @@ void sdWriteInfo() {
   infoFile.print(gpsLat, 6);
   infoFile.print(F(","));
   infoFile.println(gpsLon, 6);
-  infoFile.println(infoString);
+  infoFile.println(inputString);
   infoFile.println();
   infoFile.flush();
   infoFile.close();
@@ -388,7 +388,7 @@ void serialPrintData() {
   }
   Serial.print(positionMarker);
   Serial.print(F(","));
-  if (positionMarker == true) Serial.println(F("COMMENT"));
+  if (positionMarker == true) Serial.println(inputString);
   else Serial.println(F("---"));
   Serial.flush();
 }

@@ -3,8 +3,8 @@
 
 #define lcdAddress 0x27
 
-const int joystickXPin = A1;
-const int joystickYPin = A2;
+const int joystickXPin = A2;
+const int joystickYPin = A3;
 const int joystickSelectPin = 2;
 
 byte charMarker = 32;  // 32 = Space

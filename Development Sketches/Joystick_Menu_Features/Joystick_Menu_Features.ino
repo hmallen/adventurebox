@@ -1,17 +1,17 @@
-const int xPin = A0;
-const int yPin = A1;
-const int buttonPin = A2;
+const int joystickXPin = A2;
+const int joystickYPin = A3;
+const int buttonPin = 2;
 
 boolean xUp, xDown, yUp, yDown;
 
 void setup() {
-  Serial.begin(57600);
+  Serial.begin(9600);
   pinMode(buttonPin, INPUT);
 }
 
 void loop() {
-  int xState = analogRead(xPin);
-  int yState = analogRead(yPin);
+  int xState = analogRead(joystickXPin);
+  int yState = analogRead(joystickYPin);
   int buttonState = digitalRead(buttonPin);
 
   int xMapped = map(analogRead(joystickXPin), 0, 1023, 0, 100);
